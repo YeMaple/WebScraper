@@ -11,12 +11,41 @@ request = urllib2.Request(url)
 username = 'scraper4f'
 password = 'scraper123'
 
+# Access a protected page
 try:
-	response = urllib2.urlopen(request)
+    response = urllib2.urlopen(request)
 except IOError, e:
-	if e.code != 401:
-		print 'A different exception has occured'
-		print e.code
-	else:
-		print e.headers
-		#print e.headers['www-authenticate']
+    pass
+else:
+    print 'No authentication is required'
+    sys.exit(0)
+
+# Get authenticate scheme & realm
+authline = e.headers['www-authenticate']
+auth = re.compile(
+    r'''(?:\s*www-authenticate\s*:)?\s*(\w*)\s+realm=['"]([^'"]+)['"]''',
+    re.IGNORECASE)
+match_auth = auth.match(authline)
+
+print authline
+
+scheme = match_auth.group(1)
+realm = match_auth.group(2)
+
+print scheme
+print realm
+
+# Add user authentication
+base64string = base64.encodestring(
+                '%s:%s' % (username, password))[:-1]
+authheader =  "Basic %s" % base64string
+request.add_header("Authorization", authheader)
+
+# Re-access the page
+try:
+    response = urllib2.urlopen(request)
+except IOError, e:
+    print e.reason
+
+read_page = response.read()
+print read_page
