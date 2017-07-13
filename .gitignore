@@ -1,0 +1,5 @@
+# ignore system files
+.DS_Store
+
+# ignore pdf files
+*.pdf
