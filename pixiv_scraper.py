@@ -10,22 +10,22 @@ import requests
 
 my_pixiv_id = 'scraper4f@gmail.com'
 my_password = 'scraper123'
-#sess = requests.session()
+sess = requests.session()
 
 # Build opener that records cookies
+'''
 cookie = cookielib.CookieJar()
 auth_opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookie))
-other_opener 
+'''
 
 def retrieve_post_key():
     print 'Retrieving post key...'
     key_url = 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index'
     key_header = {
+        'Referer': 'https://www.pixiv.net/',
         'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
-        'Host' : 'accounts.pixiv.net',
-        'Connection' : 'keep-alive'
     }
-
+    '''
     request = urllib2.Request(url=key_url, headers=key_header)
     try:
         response = auth_opener.open(key_url)
@@ -48,22 +48,28 @@ def retrieve_post_key():
             print '\x1b[1;31;40m' + 'failed: no match found' + '\x1b[0m'
             sys.exit()
     '''
-    response = sess.get(key_url, headers=key_header)
-    read_page = response.text
-    key_pattern = re.compile(r'"pixivAccount.postKey":"([\d|\w]+)"')
-    key_match = key_pattern.search(read_page)
+    try:
+        response = sess.get(key_url, headers=key_header)
+        read_page = response.text
+    except IOError, e:
+        print '\x1b[1;31;40m' + 'retrival failed: something went wrong' + '\x1b[0m'
+        sys.exit()
+    else:
+        key_pattern = re.compile(r'"pixivAccount.postKey":"([\d|\w]+)"')
+        key_match = key_pattern.search(read_page)
 
     if key_match:
-        print '\x1b[1;32;40m' + 'key found' + '\x1b[0m'
+        print '\x1b[1;32;40m' + 'retrival success: key found' + '\x1b[0m'
         return key_match.group(1)
     else:
-        print '\x1b[1;31;40m' + 'failed: no match found' + '\x1b[0m'
+        print '\x1b[1;31;40m' + 'retrival failed: no match found' + '\x1b[0m'
         sys.exit()    
-    '''
 
-def account_login(post_key, pixiv_id=my_pixiv_id, password=my_password):
-    login_url = 'https://accounts.pixiv.net/api/login?lang=en'
-    login_value = {
+def account_login(pixiv_id=my_pixiv_id, password=my_password):
+    post_key = retrieve_post_key()
+
+    login_url = 'https://accounts.pixiv.net/api/login'
+    login_form = {
         'pixiv_id' : pixiv_id,
         'password' : password,
         'captcha' : '',
@@ -73,14 +79,13 @@ def account_login(post_key, pixiv_id=my_pixiv_id, password=my_password):
         'ref' : 'wwwtop_accounts_index',
         'return_to' : 'https://www.pixiv.net/',
     }
-    login_data = urllib.urlencode(login_value)
     login_header = {
         'Referer' : 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index',
         'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
-        'Connection' : 'keep-alive',
-        'Host' : 'accounts.pixiv.net'
     }
 
+    '''
+    login_data = urllib.urlencode(login_value)
     request = urllib2.Request(url=login_url, data=login_data, headers=login_header)
     try:
         response = auth_opener.open(request, timeout=20)
@@ -95,20 +100,25 @@ def account_login(post_key, pixiv_id=my_pixiv_id, password=my_password):
     else:
         print read_page
 
-    #response = sess.post(login_url, data=login_value, headers=login_header)
-
-def main():
-    post_key = retrieve_post_key()
-    account_login(post_key=post_key)
-
     home_header = {
         'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
         'Host' : 'accounts.pixiv.net',
-        'Connection' : 'keep-alive'
     }
-    home_url = 'https://www.pixiv.net/search.php?s_mode=s_tag&word=NieR'
-    response = sess.get(home_url, headers=home_header)
-    print response.text
+    home_url = 'http://www.pixiv.net/setting_profile.php'
+    request = urllib2.Request(home_url, headers=home_header)
+    response = auth_opener.open(request, timeout=20)
+    '''
+    try:
+        response = sess.post(login_url, data=login_form, headers=login_header)
+    except IOError, e:
+        print 
+
+
+    home_response = sess.get('https://www.pixiv.net/').text
+    print home_response
+
+def main():
+    account_login()
 
 if __name__ == '__main__':
     main()
