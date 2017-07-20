@@ -3,8 +3,10 @@
 import re
 import os
 import sys
+import datetime
 import time
 import requests
+import argparse
 
 my_pixiv_id = 'scraper4f@gmail.com'
 my_password = 'scraper123'
@@ -14,17 +16,27 @@ def mkdir_if_not_exists(target_dir):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
-def create_download_folder(main_dir='./pixiv', search_key_word=None):
-    recommended_dir = os.path.join(main_dir, 'Recommended')
-    top_dir = os.path.join(main_dir, 'Top')
+def create_download_folder(get_recommend, get_top, search_key_word, main_dir='./pixiv'):
+    curr_time = time.time()
+    timestamp = datetime.datetime.fromtimestamp(curr_time).strftime('%Y%m%d_%H:%M:%S')
 
+    sess_dir = os.path.join(main_dir, timestamp)
     mkdir_if_not_exists(main_dir)
-    mkdir_if_not_exists(recommended_dir)
-    mkdir_if_not_exists(top_dir)
+    mkdir_if_not_exists(sess_dir)
+
+    if get_recommend:
+        recommend_dir = os.path.join(sess_dir, 'Recommend')
+        mkdir_if_not_exists(recommend_dir)
+
+    if get_top:
+        top_dir = os.path.join(sess_dir, 'Top')
+        mkdir_if_not_exists(top_dir)
 
     if search_key_word:
-        search_dir = os.path.join(main_dir, search_key_word)
+        search_dir = os.path.join(sess_dir, search_key_word)
         mkdir_if_not_exists(search_dir)
+
+    return recommend_dir, top_dir, search_dir
 
 def retrieve_post_key():
     print 'Retrieving post key...'
@@ -79,11 +91,34 @@ def login(pixiv_id=my_pixiv_id, password=my_password):
     else:
         print '\x1b[1;32;40m' + 'login success' + '\x1b[0m'
 
-def main():
-    create_download_folder(search_key_word='NieR')
-    #login()
+def download_recommend(target_dir):
+    home_url = 'https://www.pixiv.net/'
+
+def main(get_recommend, get_top, search_key_word):
+    # Prepare folder for downloading
+    recommend_dir, top_dir, search_dir = create_download_folder(get_recommend, get_top, search_key_word)
+
+    # Session login
+    login()
+
+    if get_recommend:
+        download_recommend(recommend_dir)
 
 
 
 if __name__ == '__main__':
-    main()
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Download options.')
+    parser.add_argument('-r', '--recommend', action='store_true', dest='recommend',
+                         help='download recommeded illusts')
+    parser.add_argument('-t', '--top', action='store_true', dest='top',
+                         help='download top 100 illusts')
+    parser.add_argument('-s', '--search', action='store', dest='search_key_word',
+                         help='search keyword', type=str)
+    results = parser.parse_args()
+
+    # If no flags are set, default to download top
+    if not results.recommend and not results.top and results.search_key_word is None:
+        results.top = True
+
+    main(results.recommend, results.top, results.search_key_word)
