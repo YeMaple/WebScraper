@@ -7,6 +7,7 @@ import datetime
 import time
 import requests
 import argparse
+from bs4 import BeautifulSoup
 
 my_pixiv_id = 'scraper4f@gmail.com'
 my_password = 'scraper123'
@@ -20,9 +21,11 @@ def create_download_folder(get_recommend, get_top, search_key_word, main_dir='./
     curr_time = time.time()
     timestamp = datetime.datetime.fromtimestamp(curr_time).strftime('%Y%m%d_%H:%M:%S')
 
-    sess_dir = os.path.join(main_dir, timestamp)
+    sess_dir = os.path.join(main_dir, my_pixiv_id + '_' + timestamp)
     mkdir_if_not_exists(main_dir)
     mkdir_if_not_exists(sess_dir)
+
+    recommend_dir, top_dir, search_dir = None, None, None
 
     if get_recommend:
         recommend_dir = os.path.join(sess_dir, 'Recommend')
@@ -64,9 +67,9 @@ def retrieve_post_key():
         sys.exit()    
 
 def login(pixiv_id=my_pixiv_id, password=my_password):
-    print 'Login to pixiv account'
     post_key = retrieve_post_key()
 
+    print 'Login to pixiv account...'
     login_url = 'https://accounts.pixiv.net/api/login'
     login_form = {
         'pixiv_id' : pixiv_id,
@@ -80,7 +83,7 @@ def login(pixiv_id=my_pixiv_id, password=my_password):
     }
     login_header = {
         'Referer' : 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index',
-        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
+        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0'
     }
 
     try:
@@ -91,20 +94,67 @@ def login(pixiv_id=my_pixiv_id, password=my_password):
     else:
         print '\x1b[1;32;40m' + 'login success' + '\x1b[0m'
 
-def download_recommend(target_dir):
-    home_url = 'https://www.pixiv.net/'
+def extract_image_from_url(image_url, target_dir):
+    image_header = {
+        'Referer' : 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index',
+        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0'   
+    }
 
+    try:
+        response = sess.get(image_url, headers=image_header)
+    except IOError, e:
+        print '\x1b[1;31;40m' + 'cannot access image page' + '\x1b[0m'
+        return
+    else:
+        read_page = BeautifulSoup(response.content, 'lxml')
+
+    # Extract image source url
+    image_div = read_page.find('div', class_='works_display') 
+    image_src = image_div.find('img').get('src')
+    
+    save_name = image_src.split('/')[-1]
+    image_file = os.path.join(target_dir, save_name)
+
+    try:
+        with open(image_file, 'wb') as f:
+            f.write(sess.get(image_src, headers=image_header).content)
+        f.close()
+    except Exception, e:
+        print 'Downloading image file: ', save_name, '\x1b[1;31;40m' + ' -- download failed' + '\x1b[0m'
+    else:
+        print 'Downloading image file: ', save_name, '\x1b[1;32;40m' + ' -- download success' + '\x1b[0m'
+
+
+def download_recommend(target_dir):
+    print 'Downloading recommended illusts'
+    home_url = 'https://www.pixiv.net/'
+    home_header = {
+        'Referer' : 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index',
+        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0'   
+    }
+
+    try:
+        response = sess.get(home_url, headers=home_header)
+    except IOError, e:
+        print '\x1b[1;31;40m' + 'cannot access home page' + '\x1b[0m'
+        return
+    else:
+        read_page = BeautifulSoup(response.content, 'lxml')
+
+    recommend_section = read_page.find('section', class_='item recommended-illusts ')
+    for link in recommend_section.find_all('a', class_='work _work '):
+        image_url = home_url + link.get('href')
+        extract_image_from_url(image_url, target_dir)
+        time.sleep(1)
+    
 def main(get_recommend, get_top, search_key_word):
     # Prepare folder for downloading
     recommend_dir, top_dir, search_dir = create_download_folder(get_recommend, get_top, search_key_word)
 
     # Session login
     login()
-
     if get_recommend:
         download_recommend(recommend_dir)
-
-
 
 if __name__ == '__main__':
     # Parse command line arguments
@@ -119,6 +169,7 @@ if __name__ == '__main__':
 
     # If no flags are set, default to download top
     if not results.recommend and not results.top and results.search_key_word is None:
+        print '\x1b[1;33;40m' + 'no flags have been set, default to download top' + '\x1b[0m'
         results.top = True
 
     main(results.recommend, results.top, results.search_key_word)
