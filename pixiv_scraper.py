@@ -54,6 +54,7 @@ def retrieve_post_key():
         read_page = response.text
     except IOError, e:
         print '\x1b[1;31;40m' + 'retrival failed: something went wrong' + '\x1b[0m'
+        print e
         sys.exit()
     else:
         key_pattern = re.compile(r'"pixivAccount.postKey":"([\d|\w]+)"')
@@ -123,6 +124,7 @@ def extract_image_from_url(image_url, target_dir):
     try:
         with open(image_file, 'wb+') as f:
             f.write(sess.get(image_src, headers=image_header).content)
+        f.close()
 
     except Exception, e:
         print 'Downloading image file: ', save_name, '\x1b[1;31;40m' + ' -- download failed' + '\x1b[0m'
@@ -131,7 +133,7 @@ def extract_image_from_url(image_url, target_dir):
 
 def download_recommend(target_dir):
     print 'Downloading recommended illusts'
-    home_url = 'https://www.pixiv.net/'
+
     recommend_main_url = 'https://www.pixiv.net/recommended.php'
     recommend_main_header = {
         'Referer' : 'https://www.pixiv.net/',
@@ -142,6 +144,7 @@ def download_recommend(target_dir):
         response = sess.get(recommend_main_url, headers=recommend_main_header)
     except IOError, e:
         print '\x1b[1;31;40m' + 'cannot access recommend page' + '\x1b[0m'
+        print e
         return
     else:
         read_page = BeautifulSoup(response.content, 'lxml')
@@ -166,8 +169,8 @@ def download_recommend(target_dir):
                             headers=recommend_get_header, 
                             params=recommend_get_form)
     except IOError, e:
-        print e
         print '\x1b[1;31;40m' + 'cannot get recommendations' + '\x1b[0m'
+        print e
         return
     else:
         read_page = response.json()
@@ -178,6 +181,61 @@ def download_recommend(target_dir):
         extract_image_from_url(image_url, target_dir)
         time.sleep(3)
 
+def download_top(target_dir):
+    print 'Downloading top illusts'
+
+    home_url = 'https://www.pixiv.net/'
+    top_url = 'https://www.pixiv.net/ranking_area.php?type=detail&no=6'
+    try:
+        response = sess.get(top_url)
+    except IOError, e:
+        print '\x1b[1;31;40m' + 'cannot access top page' + '\x1b[0m'
+        print e
+        return
+    else:
+        read_page = BeautifulSoup(response.content, 'lxml')
+
+    top_div = read_page.find_all('div', class_='ranking-item')
+    for div in top_div:
+        urls = div.find_all('a')
+        image_url = home_url + urls[1].get('href')
+        extract_image_from_url(image_url, target_dir)
+        time.sleep(3)
+
+def download_search(key_word,target_dir):
+    print 'Searching key word {}'.format(key_word)
+
+    home_url = 'https://www.pixiv.net/'
+    search_url = 'https://www.pixiv.net/search.php'
+    search_header = {
+        'Referer' : 'https://www.pixiv.net/',
+        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
+        'Connection' : 'keep-alive'
+    }
+    search_form = {
+        's_mode': 's_tag',
+        'word' : key_word
+    }
+
+    try:
+        response = sess.get(search_url,
+                            headers=search_header,
+                            params=search_form)
+    except IOError, e:
+        print '\x1b[1;31;40m' + 'cannot access search page' + '\x1b[0m'
+        print e
+        return
+    else:
+        read_page = BeautifulSoup(response.content, 'lxml')
+
+    search_section = read_page.find('section', class_='column-search-result')
+    image_list = search_section.find_all('li', class_='image-item')
+    for item in image_list:
+        urls = item.find_all('a')
+        image_url = home_url + urls[1].get('href')
+        extract_image_from_url(image_url, target_dir)
+        time.sleep(3)
+
     
 def main(get_recommend, get_top, search_key_word):
     # Prepare folder for downloading
@@ -185,8 +243,21 @@ def main(get_recommend, get_top, search_key_word):
 
     # Session login
     login()
+
+    # Download
     if get_recommend:
         download_recommend(recommend_dir)
+        time.sleep(5)
+
+    if get_top:
+        download_top(top_dir)
+        time.sleep(5)
+
+    if search_key_word:
+        download_search(search_key_word, search_dir)
+        time.sleep(5)
+
+    sess.close()
 
 if __name__ == '__main__':
     # Parse command line arguments
