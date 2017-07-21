@@ -95,8 +95,9 @@ def login(pixiv_id=my_pixiv_id, password=my_password):
         print '\x1b[1;32;40m' + 'login success' + '\x1b[0m'
 
 def extract_image_from_url(image_url, target_dir):
+    print 'Extracting image... from ', image_url
     image_header = {
-        'Referer' : 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index',
+        'Referer' : 'https://www.pixiv.net/',
         'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0'   
     }
 
@@ -109,43 +110,74 @@ def extract_image_from_url(image_url, target_dir):
         read_page = BeautifulSoup(response.content, 'lxml')
 
     # Extract image source url
-    image_div = read_page.find('div', class_='works_display') 
-    image_src = image_div.find('img').get('src')
+    image_div = read_page.find('div', class_='works_display')
+    if image_div:
+        image_src = image_div.find('img').get('src')
+    else:
+        print '\x1b[1;33;40m' + 'no images found on page' + '\x1b[0m'
+        return
     
     save_name = image_src.split('/')[-1]
     image_file = os.path.join(target_dir, save_name)
 
     try:
-        with open(image_file, 'wb') as f:
+        with open(image_file, 'wb+') as f:
             f.write(sess.get(image_src, headers=image_header).content)
-        f.close()
+
     except Exception, e:
         print 'Downloading image file: ', save_name, '\x1b[1;31;40m' + ' -- download failed' + '\x1b[0m'
     else:
         print 'Downloading image file: ', save_name, '\x1b[1;32;40m' + ' -- download success' + '\x1b[0m'
 
-
 def download_recommend(target_dir):
     print 'Downloading recommended illusts'
     home_url = 'https://www.pixiv.net/'
-    home_header = {
-        'Referer' : 'https://accounts.pixiv.net/login?lang=en&source=pc&view_type=page&ref=wwwtop_accounts_index',
-        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0'   
+    recommend_main_url = 'https://www.pixiv.net/recommended.php'
+    recommend_main_header = {
+        'Referer' : 'https://www.pixiv.net/',
+        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
     }
 
     try:
-        response = sess.get(home_url, headers=home_header)
+        response = sess.get(recommend_main_url, headers=recommend_main_header)
     except IOError, e:
-        print '\x1b[1;31;40m' + 'cannot access home page' + '\x1b[0m'
+        print '\x1b[1;31;40m' + 'cannot access recommend page' + '\x1b[0m'
         return
     else:
         read_page = BeautifulSoup(response.content, 'lxml')
 
-    recommend_section = read_page.find('section', class_='item recommended-illusts ')
-    for link in recommend_section.find_all('a', class_='work _work '):
-        image_url = home_url + link.get('href')
+    hidden_tt = read_page.find('input', {'name' : 'tt'}).get('value')
+
+    recommend_get_url = 'https://www.pixiv.net/rpc/recommender.php'
+    recommend_get_header = {
+        'Referer' : 'https://www.pixiv.net/recommended.php',
+        'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:54.0) Gecko/20100101 Firefox/54.0',
+        'Connection' : 'keep-alive'
+    }
+    recommend_get_form = {
+        'type' : 'illust',
+        'sample_illusts' : 'auto',
+        'num_recommendations' : '500',
+        'tt' : hidden_tt
+    }
+
+    try:
+        response = sess.get(recommend_get_url, 
+                            headers=recommend_get_header, 
+                            params=recommend_get_form)
+    except IOError, e:
+        print e
+        print '\x1b[1;31;40m' + 'cannot get recommendations' + '\x1b[0m'
+        return
+    else:
+        read_page = response.json()
+
+    image_base_url = 'https://www.pixiv.net/member_illust.php?mode=medium&illust_id={0}'
+    for illust_id in read_page['recommendations']:
+        image_url = image_base_url.format(illust_id)
         extract_image_from_url(image_url, target_dir)
-        time.sleep(1)
+        time.sleep(3)
+
     
 def main(get_recommend, get_top, search_key_word):
     # Prepare folder for downloading
